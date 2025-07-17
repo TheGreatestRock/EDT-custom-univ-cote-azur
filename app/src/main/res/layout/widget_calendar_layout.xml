@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@android:color/white"
     android:padding="8dp">
@@ -16,40 +16,20 @@
         android:gravity="center"
         android:padding="4dp" />
 
-
+    <!-- Ligne du jour affiché -->
     <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:id="@+id/header_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="4dp"/>
 
-        <!-- En-tête des heures -->
-        <LinearLayout
-            android:id="@+id/header_row"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="80dp"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:padding="4dp"
-                android:gravity="center" />
-
-            <!-- Les heures seront ajoutées ici dynamiquement -->
-
-        </LinearLayout>
-
-        <!-- Conteneur pour les lignes des jours -->
-        <LinearLayout
-            android:id="@+id/timetable_container"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-            <!-- Les jours et événements seront ajoutés ici dynamiquement -->
-        </LinearLayout>
-
-    </LinearLayout>
+    <!-- Grille : lignes = heures -->
+    <LinearLayout
+        android:id="@+id/timetable_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
 
     <Button
         android:id="@+id/refresh_button"
@@ -57,5 +37,4 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:text="Actualiser" />
-
 </LinearLayout>

@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import androidx.core.content.edit
 
 data class CalendarEvent(
     val title: String,
@@ -51,54 +53,52 @@ class MyCalendarWidget : AppWidgetProvider() {
         }
 
         private fun generateTimetableView(context: Context, views: RemoteViews, events: List<CalendarEvent>) {
+            // Nettoyer
+            views.removeAllViews(R.id.header_row)
+            views.removeAllViews(R.id.timetable_container)
+
+            val DAYS = listOf("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi")
+            val HOURS = listOf("8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h")
+
             // Trouver le prochain jour avec des événements
             val nextDayWithEvents = findNextDayWithEvents(events)
 
             if (nextDayWithEvents == null) {
-                // Aucun événement à venir, afficher un message
                 views.setTextViewText(R.id.widget_title, "Aucun cours à venir")
                 return
             }
 
             val (dayIndex, dayEvents) = nextDayWithEvents
             val dayName = DAYS[dayIndex]
-
-            // Mettre à jour le titre avec le jour
             views.setTextViewText(R.id.widget_title, "Cours du $dayName")
 
-            // Créer l'en-tête des heures pour les événements du jour
-            val headerRow = R.id.header_row
-            val hoursWithEvents = dayEvents.map { it.hour }.distinct().sorted()
+            // Ajouter l'en-tête : juste le nom du jour
+            val dayView = RemoteViews(context.packageName, R.layout.day_header_item)
+            dayView.setTextViewText(R.id.day_text, dayName)
+            views.addView(R.id.header_row, dayView)
 
-            views.removeAllViews(R.id.header_row)
-            views.removeAllViews(R.id.timetable_container)
-            for (hourIndex in hoursWithEvents) {
-                views.addView(headerRow, RemoteViews(context.packageName, R.layout.hour_header_item).apply {
-                    setTextViewText(R.id.hour_text, HOURS[hourIndex])
-                })
-            }
+            // Obtenir toutes les heures avec cours (ou toutes pour un affichage complet)
+            val allHourIndices = (0 until HOURS.size)
 
-            // Créer la ligne du jour
-            val container = R.id.timetable_container
-            val dayRow = RemoteViews(context.packageName, R.layout.day_row).apply {
-                setTextViewText(R.id.day_name, dayName)
-            }
+            for (hourIndex in allHourIndices) {
+                val hourRow = RemoteViews(context.packageName, R.layout.hour_row)
+                hourRow.setTextViewText(R.id.hour_label, HOURS[hourIndex])
 
-            val cellsContainer = R.id.day_cells
-            for (hourIndex in hoursWithEvents) {
                 val cellView = RemoteViews(context.packageName, R.layout.timetable_cell)
-
                 val event = dayEvents.find { it.hour == hourIndex }
+
                 if (event != null) {
                     cellView.setTextViewText(R.id.cell_text, event.title)
-                    cellView.setInt(R.id.cell_background, "setBackgroundColor", event.color)
+                    cellView.setTextViewText(R.id.cell_room, event.room ?: "")
+                    cellView.setInt(R.id.cell_container, "setBackgroundColor", event.color)
                 }
 
-                dayRow.addView(cellsContainer, cellView)
+                hourRow.addView(R.id.hour_cells, cellView)
+                views.addView(R.id.timetable_container, hourRow)
             }
-
-            views.addView(container, dayRow)
         }
+
+
 
         private fun findNextDayWithEvents(events: List<CalendarEvent>): Pair<Int, List<CalendarEvent>>? {
             val calendar = Calendar.getInstance()
@@ -127,11 +127,27 @@ class MyCalendarWidget : AppWidgetProvider() {
 
         private suspend fun fetchCalendarEvent(context: Context): List<CalendarEvent> {
             return try {
-                val biweeklyEvents = fetchCalendarEvents()
-                convertToCalendarEvents(biweeklyEvents)
+                val biweeklyEvents = fetchCalendarEvents() // récupération live (existant)
+                val calendarEvents = convertToCalendarEvents(biweeklyEvents)
+
+                // 🔁 Caching dans SharedPreferences
+                val json = Gson().toJson(calendarEvents)
+                context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
+                    .edit { putString("cached_events", json) }
+
+                calendarEvents
             } catch (e: Exception) {
                 e.printStackTrace()
-                emptyList()
+
+                // 🔄 En cas d'erreur, lire depuis le cache
+                val prefs = context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
+                val cachedJson = prefs.getString("cached_events", null)
+
+                if (cachedJson != null) {
+                    Gson().fromJson(cachedJson, object : TypeToken<List<CalendarEvent>>() {}.type)
+                } else {
+                    emptyList()
+                }
             }
         }
 

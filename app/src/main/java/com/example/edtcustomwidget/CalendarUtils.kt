@@ -1,6 +1,9 @@
 package com.example.edtcustomwidget
 
+import android.content.Context
 import biweekly.Biweekly
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
@@ -42,3 +45,4 @@ suspend fun fetchCalendarEvents(): List<BiweeklyEvent> = withContext(Dispatchers
         emptyList()
     }
 }
+

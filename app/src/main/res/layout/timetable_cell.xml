@@ -1,9 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/cell_text"
-    android:layout_width="60dp"
-    android:layout_height="60dp"
-    android:gravity="center"
-    android:padding="2dp"
-    android:textSize="11sp"
-    android:background="@+id/cell_background" />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cell_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#D0E1FF"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/cell_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Nom du cours"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:textSize="12sp"/>
+
+    <TextView
+        android:id="@+id/cell_room"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Salle 101"
+        android:textSize="11sp"
+        android:textColor="#333333"/>
+</LinearLayout>
