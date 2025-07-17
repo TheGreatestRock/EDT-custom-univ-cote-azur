@@ -11,16 +11,16 @@
         android:id="@+id/cell_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Nom du cours"
+        android:text=""
         android:textStyle="bold"
         android:textColor="#000000"
-        android:textSize="12sp"/>
+        android:textSize="11sp"/>
 
     <TextView
         android:id="@+id/cell_room"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Salle 101"
-        android:textSize="11sp"
+        android:text=""
+        android:textSize="10sp"
         android:textColor="#333333"/>
 </LinearLayout>
