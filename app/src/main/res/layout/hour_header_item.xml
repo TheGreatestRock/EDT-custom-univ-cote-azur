@@ -1,0 +1,8 @@
+<!-- res/layout/hour_header_item.xml -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hour_text"
+    android:layout_width="60dp"
+    android:layout_height="wrap_content"
+    android:padding="4dp"
+    android:gravity="center"
+    android:textSize="12sp" />
