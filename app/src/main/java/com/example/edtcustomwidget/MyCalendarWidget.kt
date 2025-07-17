@@ -16,7 +16,11 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import androidx.core.content.edit
 import java.text.SimpleDateFormat
+import kotlin.div
 import kotlin.math.roundToInt
+import kotlin.or
+import kotlin.text.compareTo
+import kotlin.text.format
 
 data class CalendarEvent(
     val title: String,
@@ -30,7 +34,12 @@ data class CalendarEvent(
 class MyCalendarWidget : AppWidgetProvider() {
 
     companion object {
+        private const val ACTION_PREVIOUS_DAY = "PREVIOUS_DAY"
+        private const val ACTION_NEXT_DAY = "NEXT_DAY"
+        private const val PREF_CURRENT_DATE_OFFSET = "current_date_offset"
+
         private val HOURS = listOf("8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h")
+
 
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             CoroutineScope(Dispatchers.IO).launch {
@@ -38,17 +47,62 @@ class MyCalendarWidget : AppWidgetProvider() {
                 CoroutineScope(Dispatchers.Main).launch {
                     val views = RemoteViews(context.packageName, R.layout.widget_calendar_layout)
 
-                    val refreshIntent = Intent(context, MyCalendarWidget::class.java).apply {
-                        action = "REFRESH_WIDGET"
-                    }
-                    val refreshPendingIntent = PendingIntent.getBroadcast(
-                        context, 0, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
+                    // Ajout des boutons de navigation
+                    setupNavigationButtons(context, views)
 
                     generateTimetableView(context, views, events)
                     manager.updateAppWidget(widgetId, views)
                 }
             }
+        }
+
+        private fun setupNavigationButtons(context: Context, views: RemoteViews) {
+            // Bouton précédent
+            val prevIntent = Intent(context, MyCalendarWidget::class.java).apply {
+                action = ACTION_PREVIOUS_DAY
+            }
+            val prevPendingIntent = PendingIntent.getBroadcast(
+                context, 1, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.btn_previous, prevPendingIntent)
+
+            // Bouton suivant
+            val nextIntent = Intent(context, MyCalendarWidget::class.java).apply {
+                action = ACTION_NEXT_DAY
+            }
+            val nextPendingIntent = PendingIntent.getBroadcast(
+                context, 2, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.btn_next, nextPendingIntent)
+        }
+
+
+        private fun getCurrentDateOffset(context: Context): Int {
+            return context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+                .getInt(PREF_CURRENT_DATE_OFFSET, 0)
+        }
+
+        private fun setCurrentDateOffset(context: Context, offset: Int) {
+            context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+                .edit { putInt(PREF_CURRENT_DATE_OFFSET, offset) }
+        }
+
+        private fun findDateWithEvents(events: List<CalendarEvent>, offset: Int): Pair<String, List<CalendarEvent>>? {
+            val today = Calendar.getInstance()
+            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+            // Calculer la date cible en ajoutant l'offset jour par jour
+            val targetCalendar = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, offset)
+            }
+            val targetDate = formatter.format(targetCalendar.time)
+
+            // Grouper tous les événements par date
+
+            val eventsByDate = events.groupBy { it.date }
+
+            // Retourner la date cible avec ses événements (même si vide)
+            return Pair(targetDate, eventsByDate[targetDate] ?: emptyList())
         }
 
         private fun generateTimetableView(context: Context, views: RemoteViews, events: List<CalendarEvent>) {
@@ -58,19 +112,27 @@ class MyCalendarWidget : AppWidgetProvider() {
             val formatterInput = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val formatterOutput = SimpleDateFormat("EEEE dd MMMM", Locale.FRENCH)
 
-            val result = findNextDateWithEvents(events)
+            val offset = getCurrentDateOffset(context)
+            val result = findDateWithEvents(events, offset)
+
             if (result == null) {
-                views.setTextViewText(R.id.widget_title, "Aucun cours à venir")
+                views.setTextViewText(R.id.widget_title, "Erreur de date")
                 return
             }
 
             val (dateStr, rawEvents) = result
-            val groupedEvents = groupContiguousEvents(rawEvents)
             val formattedDate = formatterOutput.format(formatterInput.parse(dateStr)!!)
+
+            if (rawEvents.isEmpty()) {
+                views.setTextViewText(R.id.widget_title, "Aucun cours le $formattedDate")
+                return
+            }
+
+            val groupedEvents = groupContiguousEvents(rawEvents)
             views.setTextViewText(R.id.widget_title, "Cours du $formattedDate")
 
             val sorted = groupedEvents.sortedBy { it.startHour }
-            var currentHour = 8.0f
+            var currentHour = 6.0f
 
             while (currentHour < 19.0f) {
                 val matchingEvent = sorted.find { it.startHour == currentHour }
@@ -101,7 +163,6 @@ class MyCalendarWidget : AppWidgetProvider() {
 
                     currentHour = matchingEvent.endHour
                 } else {
-                    // Utiliser un layout différent pour les lignes vides (plus petites)
                     val row = RemoteViews(context.packageName, R.layout.hour_row_empty)
                     row.setTextViewText(R.id.hour_label, formatHour(currentHour))
 
@@ -160,26 +221,20 @@ class MyCalendarWidget : AppWidgetProvider() {
             return null
         }
 
-        private suspend fun fetchCalendarEvent(context: Context): List<CalendarEvent> {
+        private fun fetchCalendarEvent(context: Context): List<CalendarEvent> {
             return try {
-                val biweeklyEvents = fetchCalendarEvents()
-                val calendarEvents = convertToCalendarEvents(biweeklyEvents)
-
-                val json = Gson().toJson(calendarEvents)
-                context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
-                    .edit { putString("cached_events", json) }
-
-                calendarEvents
-            } catch (e: Exception) {
-                e.printStackTrace()
                 val prefs = context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
                 val cachedJson = prefs.getString("cached_events", null)
+
 
                 if (cachedJson != null) {
                     Gson().fromJson(cachedJson, object : TypeToken<List<CalendarEvent>>() {}.type)
                 } else {
                     emptyList()
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
             }
         }
 
@@ -217,16 +272,27 @@ class MyCalendarWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == "REFRESH_WIDGET") {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(ComponentName(context, MyCalendarWidget::class.java))
-            ids.forEach { updateWidget(context, manager, it) }
+
+        when (intent.action) {
+            "REFRESH_WIDGET" -> {
+                refreshWidget(context)
+            }
+            ACTION_PREVIOUS_DAY -> {
+                val currentOffset = getCurrentDateOffset(context)
+                setCurrentDateOffset(context, currentOffset - 1)
+                refreshWidget(context)
+            }
+            ACTION_NEXT_DAY -> {
+                val currentOffset = getCurrentDateOffset(context)
+                setCurrentDateOffset(context, currentOffset + 1)
+                refreshWidget(context)
+            }
         }
     }
 
-    fun cacheEvents(context: Context, events: List<CalendarEvent>) {
-        val json = Gson().toJson(events)
-        context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
-            .edit().putString("cached_events", json).apply()
+    private fun refreshWidget(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(ComponentName(context, MyCalendarWidget::class.java))
+        ids.forEach { updateWidget(context, manager, it) }
     }
 }

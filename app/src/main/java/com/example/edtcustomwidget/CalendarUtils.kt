@@ -30,10 +30,23 @@ suspend fun fetchCalendarEvents(): List<BiweeklyEvent> = withContext(Dispatchers
                 val description = event.description?.value
 
                 if (start != null && end != null && summary != null) {
+                    // Corriger le fuseau horaire
+                    val adjustedStart = Calendar.getInstance().apply {
+                        time = start
+                        add(Calendar.HOUR_OF_DAY, 2)
+                    }.time
+
+                    val adjustedEnd = Calendar.getInstance().apply {
+                        time = end
+                        add(Calendar.HOUR_OF_DAY, 2)
+                    }.time
+
+                    println("Event: $summary, Start: $adjustedStart, End: $adjustedEnd, Location: $location")
+
                     BiweeklyEvent(
                         title = summary,
-                        start = start,
-                        end = end,
+                        start = adjustedStart,
+                        end = adjustedEnd,
                         location = location,
                         description = description
                     )
@@ -45,4 +58,3 @@ suspend fun fetchCalendarEvents(): List<BiweeklyEvent> = withContext(Dispatchers
         emptyList()
     }
 }
-
