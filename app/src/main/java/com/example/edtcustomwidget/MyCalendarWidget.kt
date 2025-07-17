@@ -44,7 +44,6 @@ class MyCalendarWidget : AppWidgetProvider() {
                     val refreshPendingIntent = PendingIntent.getBroadcast(
                         context, 0, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
-                    views.setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent)
 
                     generateTimetableView(context, views, events)
                     manager.updateAppWidget(widgetId, views)
@@ -70,9 +69,7 @@ class MyCalendarWidget : AppWidgetProvider() {
             val formattedDate = formatterOutput.format(formatterInput.parse(dateStr)!!)
             views.setTextViewText(R.id.widget_title, "Cours du $formattedDate")
 
-            // Sort events by startHour
             val sorted = groupedEvents.sortedBy { it.startHour }
-
             var currentHour = 8.0f
 
             while (currentHour < 19.0f) {
@@ -104,18 +101,17 @@ class MyCalendarWidget : AppWidgetProvider() {
 
                     currentHour = matchingEvent.endHour
                 } else {
-                    val row = RemoteViews(context.packageName, R.layout.hour_row)
+                    // Utiliser un layout différent pour les lignes vides (plus petites)
+                    val row = RemoteViews(context.packageName, R.layout.hour_row_empty)
                     row.setTextViewText(R.id.hour_label, formatHour(currentHour))
 
-                    val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell)
+                    val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
                     emptyCell.setTextViewText(R.id.cell_text, "")
-                    emptyCell.setTextViewText(R.id.cell_room, "")
                     row.addView(R.id.hour_cells, emptyCell)
 
                     views.addView(R.id.timetable_container, row)
                     currentHour += 0.5f
                 }
-
             }
         }
 
