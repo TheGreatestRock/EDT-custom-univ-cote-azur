@@ -1,5 +1,6 @@
 package com.example.edtcustomwidget
 
+import android.R.attr.timeZone
 import android.content.Context
 import biweekly.Biweekly
 import com.google.gson.Gson
@@ -22,31 +23,32 @@ suspend fun fetchCalendarEvents(): List<BiweeklyEvent> = withContext(Dispatchers
         val url = URL("https://edtweb.univ-cotedazur.fr/jsp/custom/modules/plannings/anonymous_cal.jsp?resources=64194&projectId=5&calType=ical&firstDate=2025-08-01&lastDate=2026-08-01")
         url.openStream().use { stream ->
             val calendar = Biweekly.parse(stream).first()
+
+            val frenchTimeZone = TimeZone.getTimeZone("Europe/Paris")
+
             calendar.events.mapNotNull { event ->
-                val start = event.dateStart?.value
-                val end = event.dateEnd?.value
+                val start = event.dateStart?.value?.let {
+                    Calendar.getInstance(frenchTimeZone).apply {
+                        time = it
+                    }.time
+                }
+                val end = event.dateEnd?.value?.let {
+                    Calendar.getInstance(frenchTimeZone).apply {
+                        time = it
+                    }.time
+                }
                 val summary = event.summary?.value
                 val location = event.location?.value
                 val description = event.description?.value
 
                 if (start != null && end != null && summary != null) {
-                    // Corriger le fuseau horaire
-                    val adjustedStart = Calendar.getInstance().apply {
-                        time = start
-                        add(Calendar.HOUR_OF_DAY, 2)
-                    }.time
 
-                    val adjustedEnd = Calendar.getInstance().apply {
-                        time = end
-                        add(Calendar.HOUR_OF_DAY, 2)
-                    }.time
-
-                    println("Event: $summary, Start: $adjustedStart, End: $adjustedEnd, Location: $location")
+                    println("Event: $summary, Start: $start, End: $end, Location: $location")
 
                     BiweeklyEvent(
                         title = summary,
-                        start = adjustedStart,
-                        end = adjustedEnd,
+                        start = start,
+                        end = end,
                         location = location,
                         description = description
                     )

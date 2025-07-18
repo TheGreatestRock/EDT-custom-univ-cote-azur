@@ -50,4 +50,13 @@
         android:layout_height="wrap_content"
         android:orientation="vertical" />
 
+    <!-- bouton de rafraîchissement -->
+    <Button
+        android:id="@+id/btn_refresh"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Rafraîchir"
+        android:textSize="12sp"
+        android:layout_marginTop="8dp"/>
+
 </LinearLayout>

@@ -12,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.core.content.edit
 import android.util.Log
+import androidx.lifecycle.lifecycleScope
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,8 +26,8 @@ class MainActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.eventRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        GlobalScope.launch(Dispatchers.IO) {
-            val allEvents = fetchCalendarEvents()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val allEvents = withContext(Dispatchers.IO) { fetchCalendarEvents() }
 
             Log.d("MainActivity", "Nombre total d'événements récupérés: ${allEvents.size}")
 
@@ -44,8 +45,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent?.action == "REFRESH_WIDGET") {
+            Log.d("MainActivity", "Intent REFRESH_WIDGET reçu, relance de la coroutine.")
+            lifecycleScope.launch {
+                val allEvents = withContext(Dispatchers.IO) {
+                    fetchCalendarEvents()
+                }
+                withContext(Dispatchers.IO) {
+                    cacheEventsForWidget(allEvents)
+                }
+            }
+        }
+    }
+
+
+
     private fun cacheEventsForWidget(events: List<BiweeklyEvent>) {
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        formatter.timeZone = TimeZone.getTimeZone("Europe/Paris") // Forcer le fuseau français
 
         val calendarEvents = events.mapNotNull { event ->
             try {
@@ -61,7 +80,7 @@ class MainActivity : AppCompatActivity() {
                     date = date,
                     startHour = startHour,
                     endHour = endHour,
-                    color = android.graphics.Color.GRAY,
+                    color = generateColorFromTitle(event.title),
                     room = event.location
                 )
             } catch (e: Exception) {
@@ -77,11 +96,15 @@ class MainActivity : AppCompatActivity() {
 
         // Sauvegarde dans SharedPreferences
         val json = Gson().toJson(calendarEvents)
+        val now = System.currentTimeMillis()
+
         getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
             .edit {
                 putString("cached_events", json)
+                putLong("cache_timestamp", now)
                 Log.d("MainActivity", "Événements sauvegardés dans le cache.")
             }
+
 
         // Déclencher la mise à jour du widget
         val intent = Intent(this, MyCalendarWidget::class.java).apply {

@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.util.Log
 import android.widget.RemoteViews
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,15 @@ class MyCalendarWidget : AppWidgetProvider() {
                 context, 2, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.btn_next, nextPendingIntent)
+
+            // Bouton rafraîchir
+            val refreshIntent = Intent(context, MyCalendarWidget::class.java).apply {
+                action = "REFRESH_WIDGET"
+            }
+            val refreshPendingIntent = PendingIntent.getBroadcast(
+                context, 3, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.btn_refresh, refreshPendingIntent)
         }
 
 
@@ -109,7 +119,7 @@ class MyCalendarWidget : AppWidgetProvider() {
             views.removeAllViews(R.id.header_row)
             views.removeAllViews(R.id.timetable_container)
 
-            val formatterInput = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val formatterInput = SimpleDateFormat("yyyy-MM-dd", Locale.FRENCH)
             val formatterOutput = SimpleDateFormat("EEEE dd MMMM", Locale.FRENCH)
 
             val offset = getCurrentDateOffset(context)
@@ -124,62 +134,90 @@ class MyCalendarWidget : AppWidgetProvider() {
             val formattedDate = formatterOutput.format(formatterInput.parse(dateStr)!!)
 
             if (rawEvents.isEmpty()) {
-                views.setTextViewText(R.id.widget_title, "Aucun cours le $formattedDate")
+                views.setTextViewText(R.id.widget_title, "🎉 Journée libre - $formattedDate")
+
+                val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
+                emptyRow.setTextViewText(R.id.hour_label, "")
+
+                val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
+                emptyCell.setTextViewText(R.id.cell_text, "Profite de ta journée 😎")
+
+                emptyRow.addView(R.id.hour_cells, emptyCell)
+                views.addView(R.id.timetable_container, emptyRow)
                 return
             }
+
 
             val groupedEvents = groupContiguousEvents(rawEvents)
             views.setTextViewText(R.id.widget_title, "Cours du $formattedDate")
 
             val sorted = groupedEvents.sortedBy { it.startHour }
-            var currentHour = 6.0f
 
-            while (currentHour < 19.0f) {
-                val matchingEvent = sorted.find { it.startHour == currentHour }
+            var currentHour = 8.0f
+            val endOfDay = 18.0f
 
-                if (matchingEvent != null) {
-                    val duration = matchingEvent.endHour - matchingEvent.startHour
-                    val rows = (duration / 0.5f).roundToInt()
+            var eventIndex = 0
 
-                    for (i in 0 until rows) {
-                        val row = RemoteViews(context.packageName, R.layout.hour_row)
-                        row.setTextViewText(R.id.hour_label, formatHour(currentHour + i * 0.5f))
+            while (currentHour <= endOfDay) {
+                if (eventIndex < sorted.size) {
+                    val event = sorted[eventIndex]
 
-                        val cell = RemoteViews(context.packageName, R.layout.timetable_cell)
+                    if (currentHour < event.startHour) {
+                        // Ligne vide avant le prochain cours
+                        val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
+                        emptyRow.setTextViewText(R.id.hour_label, currentHour.toHourString())
 
-                        if (i == 0) {
-                            val fullText = "${matchingEvent.title}${matchingEvent.room?.let { " - $it" } ?: ""}"
-                            cell.setTextViewText(R.id.cell_text, fullText)
-                            cell.setTextViewText(R.id.cell_room, "")
-                        } else {
-                            cell.setTextViewText(R.id.cell_text, "")
-                            cell.setTextViewText(R.id.cell_room, "")
-                        }
+                        val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
+                        emptyCell.setTextViewText(R.id.cell_text, "")
+                        emptyRow.addView(R.id.hour_cells, emptyCell)
 
-                        cell.setInt(R.id.cell_container, "setBackgroundColor", matchingEvent.color)
-                        row.addView(R.id.hour_cells, cell)
-                        views.addView(R.id.timetable_container, row)
+                        views.addView(R.id.timetable_container, emptyRow)
+                        currentHour += 0.5f
+                    } else if (currentHour == event.startHour) {
+                        // Ligne début cours
+                        val startRow = RemoteViews(context.packageName, R.layout.hour_row)
+                        startRow.setTextViewText(R.id.hour_label, event.startHour.toHourString())
+
+                        val startCell = RemoteViews(context.packageName, R.layout.timetable_cell)
+                        val fullText = "${event.title}${event.room?.let { " - $it" } ?: ""}"
+                        startCell.setTextViewText(R.id.cell_text, fullText)
+                        startCell.setTextViewText(R.id.cell_room, "")
+                        startCell.setInt(R.id.cell_container, "setBackgroundColor", event.color)
+
+                        startRow.addView(R.id.hour_cells, startCell)
+                        views.addView(R.id.timetable_container, startRow)
+
+                        // Ligne fin cours
+                        val endRow = RemoteViews(context.packageName, R.layout.hour_row)
+                        endRow.setTextViewText(R.id.hour_label, event.endHour.toHourString())
+
+                        val endCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
+                        endCell.setTextViewText(R.id.cell_text, "")
+                        endRow.addView(R.id.hour_cells, endCell)
+
+                        views.addView(R.id.timetable_container, endRow)
+
+                        currentHour = event.endHour
+                        eventIndex++
+                    } else {
+                        // On est dans un intervalle (cours en cours), on saute à la fin
+                        currentHour = event.endHour
+                        eventIndex++
                     }
-
-                    currentHour = matchingEvent.endHour
                 } else {
-                    val row = RemoteViews(context.packageName, R.layout.hour_row_empty)
-                    row.setTextViewText(R.id.hour_label, formatHour(currentHour))
+                    // Plus de cours, on affiche les heures vides restantes
+                    val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
+                    emptyRow.setTextViewText(R.id.hour_label, currentHour.toHourString())
+
 
                     val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
                     emptyCell.setTextViewText(R.id.cell_text, "")
-                    row.addView(R.id.hour_cells, emptyCell)
+                    emptyRow.addView(R.id.hour_cells, emptyCell)
 
-                    views.addView(R.id.timetable_container, row)
+                    views.addView(R.id.timetable_container, emptyRow)
                     currentHour += 0.5f
                 }
             }
-        }
-
-        private fun formatHour(hour: Float): String {
-            val h = hour.toInt()
-            val min = if ((hour - h) >= 0.5f) "30" else "00"
-            return "${h}h$min"
         }
 
         fun groupContiguousEvents(events: List<CalendarEvent>): List<CalendarEvent> {
@@ -225,43 +263,23 @@ class MyCalendarWidget : AppWidgetProvider() {
             return try {
                 val prefs = context.getSharedPreferences("widget_cache", Context.MODE_PRIVATE)
                 val cachedJson = prefs.getString("cached_events", null)
+                val cacheTimestamp = prefs.getLong("cache_timestamp", 0L)
 
+                val now = System.currentTimeMillis()
+                val maxAge = 1000 * 60 * 60 * 6 // 6 heures
 
-                if (cachedJson != null) {
+                if (cachedJson != null && (now - cacheTimestamp) < maxAge) {
                     Gson().fromJson(cachedJson, object : TypeToken<List<CalendarEvent>>() {}.type)
                 } else {
+                    Log.w("MyCalendarWidget", "Le cache est expiré ou inexistant. Envoi du broadcast REFRESH_WIDGET.")
+                    context.sendBroadcast(Intent(context, MyCalendarWidget::class.java).apply {
+                        action = "REFRESH_WIDGET"
+                    })
                     emptyList()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 emptyList()
-            }
-        }
-
-        private fun convertToCalendarEvents(biweeklyEvents: List<BiweeklyEvent>): List<CalendarEvent> {
-            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
-            return biweeklyEvents.mapNotNull { event ->
-                val calStart = Calendar.getInstance().apply { time = event.start }
-                val calEnd = Calendar.getInstance().apply { time = event.end }
-
-                val dayOfWeek = calStart.get(Calendar.DAY_OF_WEEK)
-                if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) return@mapNotNull null
-
-                val date = formatter.format(calStart.time)
-                val startHour = calStart.get(Calendar.HOUR_OF_DAY) + (calStart.get(Calendar.MINUTE) / 60.0f)
-                val endHour = calEnd.get(Calendar.HOUR_OF_DAY) + (calEnd.get(Calendar.MINUTE) / 60.0f)
-
-                if (startHour in 8.0..18.5 && endHour > startHour) {
-                    CalendarEvent(
-                        title = event.title,
-                        date = date,
-                        startHour = startHour,
-                        endHour = endHour,
-                        color = Color.GRAY,
-                        room = event.location
-                    )
-                } else null
             }
         }
     }
