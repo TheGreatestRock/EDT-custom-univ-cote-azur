@@ -45,12 +45,12 @@ class MyCalendarWidget : AppWidgetProvider() {
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             CoroutineScope(Dispatchers.IO).launch {
                 val events = fetchCalendarEvent(context)
+                val offset = getCurrentDateOffset(context)
+                setCurrentDateOffset(context, offset)
                 CoroutineScope(Dispatchers.Main).launch {
                     val views = RemoteViews(context.packageName, R.layout.widget_calendar_layout)
 
-                    // Ajout des boutons de navigation
                     setupNavigationButtons(context, views)
-
                     generateTimetableView(context, views, events)
                     manager.updateAppWidget(widgetId, views)
                 }
@@ -107,17 +107,16 @@ class MyCalendarWidget : AppWidgetProvider() {
             }
             val targetDate = formatter.format(targetCalendar.time)
 
-            // Grouper tous les événements par date
+            // Grouper tous les cours par date
 
             val eventsByDate = events.groupBy { it.date }
 
-            // Retourner la date cible avec ses événements (même si vide)
+            // Retourner la date cible avec ses cours (même si vide)
             return Pair(targetDate, eventsByDate[targetDate] ?: emptyList())
         }
 
         private fun generateTimetableView(context: Context, views: RemoteViews, events: List<CalendarEvent>) {
-            views.removeAllViews(R.id.header_row)
-            views.removeAllViews(R.id.timetable_container)
+            views.removeAllViews(R.id.events_container)
 
             val formatterInput = SimpleDateFormat("yyyy-MM-dd", Locale.FRENCH)
             val formatterOutput = SimpleDateFormat("EEEE dd MMMM", Locale.FRENCH)
@@ -132,119 +131,26 @@ class MyCalendarWidget : AppWidgetProvider() {
 
             val (dateStr, rawEvents) = result
             val formattedDate = formatterOutput.format(formatterInput.parse(dateStr)!!)
+            views.setTextViewText(R.id.widget_title, "Cours du $formattedDate")
 
             if (rawEvents.isEmpty()) {
-                views.setTextViewText(R.id.widget_title, "🎉 Journée libre - $formattedDate")
-
-                val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
-                emptyRow.setTextViewText(R.id.hour_label, "")
-
-                val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
-                emptyCell.setTextViewText(R.id.cell_text, "Profite de ta journée 😎")
-
-                emptyRow.addView(R.id.hour_cells, emptyCell)
-                views.addView(R.id.timetable_container, emptyRow)
+                val emptyEventView = RemoteViews(context.packageName, R.layout.timetable_cell)
+                emptyEventView.setTextViewText(R.id.cell_text, "🎉 Aucun cours prévu")
+                emptyEventView.setInt(R.id.cell_container, "setBackgroundColor", Color.LTGRAY)
+                views.addView(R.id.events_container, emptyEventView)
                 return
             }
 
-
-            val groupedEvents = groupContiguousEvents(rawEvents)
-            views.setTextViewText(R.id.widget_title, "Cours du $formattedDate")
-
-            val sorted = groupedEvents.sortedBy { it.startHour }
-
-            var currentHour = 8.0f
-            val endOfDay = 18.0f
-
-            var eventIndex = 0
-
-            while (currentHour <= endOfDay) {
-                if (eventIndex < sorted.size) {
-                    val event = sorted[eventIndex]
-
-                    if (currentHour < event.startHour) {
-                        // Ligne vide avant le prochain cours
-                        val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
-                        emptyRow.setTextViewText(R.id.hour_label, currentHour.toHourString())
-
-                        val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
-                        emptyCell.setTextViewText(R.id.cell_text, "")
-                        emptyRow.addView(R.id.hour_cells, emptyCell)
-
-                        views.addView(R.id.timetable_container, emptyRow)
-                        currentHour += 0.5f
-                    } else if (currentHour == event.startHour) {
-                        // Ligne début cours
-                        val startRow = RemoteViews(context.packageName, R.layout.hour_row)
-                        startRow.setTextViewText(R.id.hour_label, event.startHour.toHourString())
-
-                        val startCell = RemoteViews(context.packageName, R.layout.timetable_cell)
-                        val fullText = "${event.title}${event.room?.let { " - $it" } ?: ""}"
-                        startCell.setTextViewText(R.id.cell_text, fullText)
-                        startCell.setTextViewText(R.id.cell_room, "")
-                        startCell.setInt(R.id.cell_container, "setBackgroundColor", event.color)
-
-                        startRow.addView(R.id.hour_cells, startCell)
-                        views.addView(R.id.timetable_container, startRow)
-
-                        // Ligne fin cours
-                        val endRow = RemoteViews(context.packageName, R.layout.hour_row)
-                        endRow.setTextViewText(R.id.hour_label, event.endHour.toHourString())
-
-                        val endCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
-                        endCell.setTextViewText(R.id.cell_text, "")
-                        endRow.addView(R.id.hour_cells, endCell)
-
-                        views.addView(R.id.timetable_container, endRow)
-
-                        currentHour = event.endHour
-                        eventIndex++
-                    } else {
-                        // On est dans un intervalle (cours en cours), on saute à la fin
-                        currentHour = event.endHour
-                        eventIndex++
-                    }
-                } else {
-                    // Plus de cours, on affiche les heures vides restantes
-                    val emptyRow = RemoteViews(context.packageName, R.layout.hour_row)
-                    emptyRow.setTextViewText(R.id.hour_label, currentHour.toHourString())
-
-
-                    val emptyCell = RemoteViews(context.packageName, R.layout.timetable_cell_empty)
-                    emptyCell.setTextViewText(R.id.cell_text, "")
-                    emptyRow.addView(R.id.hour_cells, emptyCell)
-
-                    views.addView(R.id.timetable_container, emptyRow)
-                    currentHour += 0.5f
-                }
+            rawEvents.sortedBy { it.startHour }.forEach { event ->
+                val eventView = RemoteViews(context.packageName, R.layout.timetable_cell)
+                val roomInfo = event.room?.let { "\n📍 Salle : $it" } ?: "\n📍 Salle non spécifiée"
+                eventView.setTextViewText(
+                    R.id.cell_text,
+                    "🕒 ${event.startHour.toHourString()} - ${event.endHour.toHourString()}\n📚 ${event.title}$roomInfo"
+                )
+                eventView.setInt(R.id.cell_container, "setBackgroundColor", event.color)
+                views.addView(R.id.events_container, eventView)
             }
-        }
-
-        fun groupContiguousEvents(events: List<CalendarEvent>): List<CalendarEvent> {
-            if (events.isEmpty()) return emptyList()
-
-            val grouped = mutableListOf<CalendarEvent>()
-            val sorted = events.sortedWith(compareBy({ it.date }, { it.startHour }))
-
-            var current = sorted.first()
-
-            for (i in 1 until sorted.size) {
-                val next = sorted[i]
-                val canGroup = current.title == next.title &&
-                        current.room == next.room &&
-                        current.date == next.date &&
-                        current.endHour == next.startHour
-
-                if (canGroup) {
-                    current = current.copy(endHour = next.endHour)
-                } else {
-                    grouped.add(current)
-                    current = next
-                }
-            }
-
-            grouped.add(current)
-            return grouped
         }
 
         private fun findNextDateWithEvents(events: List<CalendarEvent>): Pair<String, List<CalendarEvent>>? {

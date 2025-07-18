@@ -1,62 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@android:color/white"
-    android:padding="8dp">
+    android:padding="8dp"
+    android:background="#FFFFFF">
 
+    <!-- Titre du widget avec la date -->
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cours du jour"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="8dp"
+        android:textColor="#000000" />
+
+    <!-- Conteneur pour la liste des cours -->
+    <LinearLayout
+        android:id="@+id/events_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingTop="8dp" />
+
+    <!-- Boutons de navigation en bas -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center">
+        android:gravity="center"
+        android:paddingTop="8dp">
 
         <Button
             android:id="@+id/btn_previous"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:text="◀"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:textSize="14sp" />
+            android:text="◀"
+            android:backgroundTint="#D0E1FF"
+            android:textColor="#000000" />
+
+        <Button
+            android:id="@+id/btn_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔄"
+            android:backgroundTint="#D0E1FF"
+            android:textColor="#000000"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp" />
 
         <Button
             android:id="@+id/btn_next"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="wrap_content"
             android:text="▶"
-            android:textSize="12sp" />
+            android:backgroundTint="#D0E1FF"
+            android:textColor="#000000" />
     </LinearLayout>
-
-    <!-- Ligne du jour affiché -->
-    <LinearLayout
-        android:id="@+id/header_row"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingBottom="4dp"/>
-
-    <!-- Grille : lignes = heures -->
-    <LinearLayout
-        android:id="@+id/timetable_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" />
-
-    <!-- bouton de rafraîchissement -->
-    <Button
-        android:id="@+id/btn_refresh"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Rafraîchir"
-        android:textSize="12sp"
-        android:layout_marginTop="8dp"/>
-
 </LinearLayout>
